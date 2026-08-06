@@ -1,0 +1,5 @@
+# Python
+__pycache__/
+*.pyc
+
+# 本地验证日志（保留模板，忽略个人数据？——不需要，validation-log 是产品一部分）

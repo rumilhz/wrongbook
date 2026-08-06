@@ -1,0 +1,23 @@
+name: lint
+
+on:
+  push:
+    paths: ["templates/**", "scripts/**", "README.md"]
+  pull_request:
+    paths: ["templates/**", "scripts/**", "README.md"]
+
+jobs:
+  validate-lessons:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 校验错题本格式（禁止X —— 因为会Y）
+        run: python scripts/validate_lessons.py templates/lessons.md templates/lessons.seed.md
+
+      - name: 校验 README 内嵌禁则示例
+        run: python scripts/validate_lessons.py README.md || true
