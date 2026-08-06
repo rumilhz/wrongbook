@@ -51,8 +51,10 @@ Put an `AGENTS.md` in your workspace (Claude Code: `CLAUDE.md`; Reasonix: `REASO
 
 ```markdown
 ## Meta-rule: check the mistake book before you write (prevention first)
-- Before every shell/PowerShell command, code edit, or package install, check the rulebook
-  for a matching rule; if one matches, use the preventive form — do NOT wait for an error.
+- Before every tool/command call, code edit, package install, or API call, check the rulebook
+  domains for the action type (commands→[bash]/[shell]; code→[lang]/[encoding]; install→[deps];
+  API→[tool]/[quota]…); if a rule matches, use the preventive form — do NOT wait for an error.
+- **Visible check**: before each shell tool call, print a line `[rulebook] no hit / hit X→use Y`.
 - After a command failure / non-zero exit / tool error: record or extend a rule in the
   "DON'T X — because Y" format. No long post-mortems.
 ```
