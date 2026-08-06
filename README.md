@@ -134,4 +134,4 @@ wrongbook/
 
 ## License
 
-MIT —— 随便用，随便改，标注来源即可。欢迎 PR 补充其他平台的适配模板。
+MIT —— 见 [LICENSE](LICENSE)。欢迎 PR 补充其他平台的适配模板。

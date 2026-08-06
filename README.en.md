@@ -135,4 +135,4 @@ wrongbook/
 
 ## License
 
-MIT — use it, fork it, adapt it; attribution appreciated. PRs adding adapters for other platforms are welcome.
+MIT — see [LICENSE](LICENSE). PRs adding adapters for other platforms are welcome.
