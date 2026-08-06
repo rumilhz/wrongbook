@@ -2,31 +2,46 @@
 
 [English](README.en.md) | [中文](README.md)
 
-> Turn the waste of "error → diagnose → fix" into a rulebook your agent reads **before it acts**.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![CI](https://github.com/rumilhz/wrongbook/actions/workflows/lint.yml/badge.svg)](https://github.com/rumilhz/wrongbook/actions/workflows/lint.yml)
 
-AI agents can self-correct — given an error, they can usually diagnose and fix it themselves. But correcting is not free: it costs time, attention, and tokens. In human learning, a teacher tells you "don't write it that way" *before* you write it, and you skip the detour entirely. **This repo is that teacher for your agent**: it puts the rules in front of the agent before it runs commands, writes code, or installs packages.
+> Turn the waste of "error → diagnose → fix" into a rulebook your agent reads **before it acts**. Think of it as a teacher for your agent — the rules are in front of it before it runs commands, writes code, or installs packages.
 
----
+## ✨ Core Features
 
-## Why
+- 🛡️ **Pre-flight prevention** — check the rules before writing; if one matches, write differently and the error loop never happens
+- 📋 **Rule format, not post-mortem** — `DON'T X — because Y`: one line, scannable, token-cheap
+- 🔔 **Standing trigger** — the meta-rule lives in context every turn; no "remember to check afterwards"
+- 🧱 **Two-layer isolation** — the standing file holds only the meta-rule + ≤5 top rules; the full rulebook lives in memory
+- 🌱 **Incremental growth** — three recording triggers (errors / user corrections / external cases); repeated errors merge into one entry
+- 📊 **Measurable** — HIT / INCIDENT / RULE events are logged; first quantitative report lands after 4 weeks
 
-Most agent "experience" mechanisms are **post-hoc**:
+## Core Stack
+
+| Layer | Technology |
+|---|---|
+| Standing instructions | `AGENTS.md` / `CLAUDE.md` / `REASONIX.md` (auto-loaded every relevant turn) |
+| Memory | platform long-term memory / `lessons.md` (retrieved on demand) |
+| Lint | `scripts/validate_lessons.py` (rulebook format checker) |
+| CI | GitHub Actions (validate on push / PR) |
+
+## Architecture
 
 ```
-command errors → diagnose → recall/seek fix → repair → (maybe) record
+┌───────────────────────────────────────┐
+│  Standing instructions (in context    │
+│  every turn, cache-stable)            │
+│    Meta-rule: check the rulebook      │
+│    before you write                   │
+└──────────────────┬────────────────────┘
+                   │ meta-rule triggers
+┌──────────────────▼────────────────────┐
+│  Rulebook (memory / lessons.md,       │
+│  retrieved on demand)                 │
+│    DON'T X — because Y                │
+│    (hundreds of rules, categorized)   │
+└───────────────────────────────────────┘
 ```
-
-Every step costs money, and the same class of errors recurs across sessions — because there is no reliable bridge between "recording" and "avoiding next time".
-
-This project is **pre-flight**:
-
-```
-before writing → check the rulebook → rule hit → write it differently → no error
-```
-
-The agent already knows how to fix errors; it just spends extra time doing so. **If it knows not to write a certain way before writing, the entire error loop never happens.**
-
----
 
 ## Quick start (3 steps, ~3 minutes)
 
@@ -56,8 +71,6 @@ Append in this format (and on a repeated error, **extend the existing entry** in
   write a `.ps1` script instead, or wrap the whole string in single quotes
 ```
 
----
-
 ## Usage cheat sheet
 
 | Situation | Action |
@@ -68,8 +81,6 @@ Append in this format (and on a repeated error, **extend the existing entry** in
 | Same error a second time | **Extend** that entry (add example/variant), don't create a new one |
 | Rulebook bloated / stale | **Prune**: merge duplicates, drop obsolete entries |
 
----
-
 ## Four design decisions (summary)
 
 1. **Rule format, not post-mortem**: `DON'T X — because Y` — one line, scannable, token-cheap; the fix procedure is dropped by default, keeping only the reusable preventive form plus a one-line root cause
@@ -78,8 +89,6 @@ Append in this format (and on a repeated error, **extend the existing entry** in
 4. **Incremental + pruning**: three recording triggers; merge repeated errors into one entry; prune regularly to keep the list healthy
 
 Full rationale: [docs/principle.md](docs/principle.md).
-
----
 
 ## Real incidents (from running this method)
 
@@ -92,8 +101,6 @@ Full rationale: [docs/principle.md](docs/principle.md).
 
 > ⚠️ **Honest note on validation**: the table above is anecdotal, not quantitative evidence. Since **2026-08-06** this repo records three event types (HIT / INCIDENT / RULE) per the protocol in [docs/validation.md](docs/validation.md); the first quantitative report (hit rate, prevented count, regression rate, estimated token savings) will be backfilled after 4 weeks. Log: [data/validation-log.md](data/validation-log.md).
 
----
-
 ## Comparison with other approaches (full: [docs/comparison.md](docs/comparison.md))
 
 | Approach | Trigger | Pre-flight | Storage | Notes |
@@ -103,8 +110,6 @@ Full rationale: [docs/principle.md](docs/principle.md).
 | Lessons-DB skills (e.g. self-improvement-loop) | passive retrieval | partial | external DB | suits team-level knowledge bases; needs maintenance |
 | Post-hoc aggregators (e.g. graphify) | end-of-session | partial | generated LESSONS.md | suits project retrospectives |
 | Memory frameworks (mem0 / MemGPT / Letta) | semantic retrieval | partial | vector DB | memory infrastructure, different positioning; suits large-scale memory needs |
-
----
 
 ## Repository layout
 
@@ -130,8 +135,6 @@ wrongbook/
 └── .github/
     └── workflows/lint.yml     # CI: validate rulebook format on push/PR
 ```
-
----
 
 ## License
 
