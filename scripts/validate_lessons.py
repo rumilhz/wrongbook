@@ -20,9 +20,14 @@ from pathlib import Path
 
 MAX_RULES = 100  # 超过此数量提醒修剪（防止清单膨胀失效）
 
-RULE_RE = re.compile(r"^\s*-\s*\[([^\]]+)\]\s*(禁止\S.*)$")
+RULE_RE = re.compile(r"^\s*-\s*\[([^\]]+)\]\s*((?:禁止|DON'T).*)$", re.IGNORECASE)
 CONT_RE = re.compile(r"^\s{2,}\S.*$")  # 缩进续行
-ROOT_CAUSE = "——"
+ROOT_CAUSE_ZH = "——"      # 中文根因标记
+ROOT_CAUSE_EN = "—"        # 英文根因标记（em dash）
+
+def has_root_cause(full: str) -> bool:
+    """根因标记：中文「—— 因为」或英文 em dash（— because / — exit ...）。"""
+    return ROOT_CAUSE_ZH in full or ROOT_CAUSE_EN in full
 
 def normalize(text: str) -> str:
     """规范化用于查重：去空白、全半角括号、大小写。"""
@@ -66,11 +71,11 @@ def validate(path: Path) -> list[str]:
 
     for line_no, full in rules:
         # 1) 根因标记
-        if ROOT_CAUSE not in full:
-            errors.append(f"{path}:{line_no}: 缺少根因标记「{ROOT_CAUSE} 因为」，格式应为 `禁止 X —— 因为会 Y`")
+        if not has_root_cause(full):
+            errors.append(f"{path}:{line_no}: 缺少根因标记（中文「—— 因为」或英文 em dash「—」），格式应为 `禁止 X —— 因为会 Y` / `DON'T X — because Y`")
             continue
         # 2) 查重（按根因前的预防性写法部分）
-        head = full.split(ROOT_CAUSE, 1)[0]
+        head = re.split(r"(?:——|—)", full, maxsplit=1)[0]
         key = normalize(head)
         if key in seen:
             errors.append(f"{path}:{line_no}: 疑似重复条目（与第 {seen[key]} 行重复）：{full[:60]}...")
