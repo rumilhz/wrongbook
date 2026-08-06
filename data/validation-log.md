@@ -22,5 +22,6 @@
 
 - [2026-08-06] INCIDENT 命令=`python scripts/validate_lessons.py`（首跑） 根因=`print("✓")` 中 U+2713 在 Windows GBK 控制台抛 UnicodeEncodeError 命中已有禁则=否（关联「UTF-8 编码保中文输出」，同类变体） 沉淀=新增
 - [2026-08-06] INCIDENT 命令=`python scripts/validate_lessons.py README.en.md` 根因=RULE_RE 只认中文「禁止」且 `DON'T\S` 不匹配"空格+内容"（英文条目被漏判） 命中已有禁则=否 沉淀=扩充（校验脚本支持双语：`DON'T` + em dash 根因标记）
-- [2026-08-06] RULE 设计演进：元规则升级为「动作类型→领域映射 + 可见核对输出 `[错题本核对]` + 铁律区动态晋升（≤5条自动换血）」，同步仓库 templates 与 docs/principle.md §5；触发场景：另一项目会话实测「指令已加载但未执行核对」的流程缺口（用户提问暴露）
+- [2026-08-06] INCIDENT 命令=（示范核对时）把 `[错题本核对] ...` 文本拼进 bash 命令字符串 根因=bash 把标注当命令执行：command not found exit 127 + 含 `<<'EOF'` 触发 heredoc 解析错乱 命中已有禁则=否 沉淀=新增（禁则：标注文本放回复正文，不进命令字符串）
+- [2026-08-06] RULE 新增 条目=「[bash] 禁止把标注/说明文本（如 [错题本核对]）拼进 bash 命令字符串 —— 因为 command not found exit 127 + heredoc 解析错乱；放命令之前的回复正文」
 - [2026-08-06] RULE 新增 条目=「[脚本/Windows] 禁止在 Python `print` 用 ✓/✗ 等非 GBK 符号 —— 因为 Windows 控制台 GBK 编码抛 UnicodeEncodeError；改用 ASCII 标记 `[OK]`/`[ERROR]`」
