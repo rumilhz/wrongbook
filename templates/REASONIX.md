@@ -1,9 +1,10 @@
-# REASONIX.md —— Reasonix 平台专用版（含记忆工具用法）
+# REASONIX.md —— Reasonix 平台专用版（含存储与沉淀流程）
 
-> 与通用版 AGENTS.md 的差异：Reasonix 原生支持**长期记忆系统**，
-> 错题本直接存为全局记忆（每会话索引自动加载 + 正文按需检索），
-> 比独立 lessons.md 文件更省 token。本文件放在 Reasonix 用户全局目录
-> （如 `%APPDATA%\reasonix\REASONIX.md`），所有项目每轮加载。
+> 与通用版 AGENTS.md 的差异：Reasonix 原生支持**长期记忆系统**。
+> 存储采用「指令指针 + 全文文件 + 记忆指针」三层：完整禁则全文放在
+> `%APPDATA%\reasonix\self-improvement-lessons.md` 独立文件（权威全文，无预算限制），
+> 本文件每轮加载并指向它，全局记忆条目只留指针 + 高频铁律。
+> 本文件放在 Reasonix 用户全局目录（如 `%APPDATA%\reasonix\REASONIX.md`），所有项目每轮加载。
 
 ## 元规则：动手前核对错题本（防错优先，不做事后纠错）
 
@@ -35,12 +36,14 @@
 - 禁止把可能无匹配的 `grep` 放在命令链末尾（不带兜底）—— 无匹配返回 exit 1 污染整条命令；加 `|| echo NO_MATCH` 或 `|| true`。
 - 禁止常规抓取/单页查询直接上 Firecrawl —— 云端按 credits 计费、免费额度有限；先用内置 `web_fetch`，需渲染/搜索聚合再升级。
 
-（完整禁则清单在全局记忆 self-improvement-lessons，按需检索；本文件保持精简，新增禁则只进记忆，铁律区由错题本中频率最高/最痛条目自动晋升。）
+（**完整禁则清单在 `%APPDATA%\reasonix\self-improvement-lessons.md`**（权威全文，无预算限制），全局记忆 self-improvement-lessons 只留指针 + 铁律；执行前按需检索；本文件保持精简，新增禁则只进全文文件，铁律区由错题本中频率最高/最痛条目自动晋升。）
 
-## 记忆工具用法备忘
+## 存储与沉淀流程备忘
 
-- **沉淀**：调用记忆工具的 `remember`（type=feedback），一条禁则追加/扩充到
-  `self-improvement-lessons`，正文用「禁止 X —— 因为会 Y」格式。
-- **检索**：动手前用记忆工具 `search`（query 含动作类型关键词，如 `bash`、`安装`、`路径`）
-  核对是否命中禁则。
+- **权威全文**：`%APPDATA%\reasonix\self-improvement-lessons.md`（2026-08-13 起外置；
+  原因：pinned 记忆有 1500 字符预算，全文放记忆后无法再更新——写入被「pinning 预算超限」拒绝）。
+- **沉淀**：新增/扩充禁则直接写入上述文件（追加一行 `禁止 X —— 因为会 Y` 或扩充单条），
+  无需调用 remember、不受预算限制；如需改记忆指针，用 bash 直接编辑
+  `memory\global\self-improvement-lessons.md` 的 body（保留 frontmatter）。
+- **检索**：动手前核对本文「高频铁律」+ 全文文件对应领域（关键词：`bash`、`安装`、`路径`…）。
 - **主题特定经验**：留在对应主题的记忆里（如部署备忘），错题本只放通用禁则 + `[[链接]]` 指针。
