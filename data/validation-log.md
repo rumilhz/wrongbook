@@ -34,3 +34,6 @@
 - [2026-08-13] HIT  领域=bash 禁则=「heredoc 定界符避开内容中的 `<<'EOF'` 字样」 效果=写记忆文件改用 `<<'WRITEMEMEOF'` 定界符 避错=1
 - [2026-08-13] HIT  领域=bash 禁则=「不直接操作可能不存在的路径」 效果=多处先 `[ -f ] &&` 判断再 cat/ls 避错=1
 - [2026-08-13] HIT  领域=bash/PowerShell 禁则=「`$_` 用单引号包裹」 效果=进程查询整串单引号包裹防 bash 展开 避错=1
+
+- [2026-08-13] INCIDENT 命令=（WrongBook 仓库核对任务中）把 `[错题本核对] 领域=命令/Windows 无命中...` 中文标注拼进 PowerShell 命令字符串首行 根因=Windows PS 5.1 将整段当脚本解析：ParserError「表达式或语句中包含意外的标记"领域=命令/Windows"」exit 1，且中文经 GBK 解码变乱码 命中已有禁则=**是**（「禁止把标注/说明文本拼进命令字符串」，2026-08-06 已立）→ **二次复发**（首见于 bash 场景，本次 PowerShell 变体） 沉淀=扩充（禁则标题加 [PowerShell] 域：标注文本只放回复正文，命令串保持纯 ASCII）
+- [2026-08-13] RULE 扩充 条目=「[bash/PowerShell] 禁止把标注/说明文本（如 [错题本核对]）拼进 bash/PowerShell 命令字符串」——2026-08-13 二次复发（PS 5.1 ParserError + 中文 GBK 乱码），标题补 PowerShell 域、根因补 PS 5.1 解析行为
