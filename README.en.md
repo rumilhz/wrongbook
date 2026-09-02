@@ -14,7 +14,7 @@
 - 🔔 **Standing trigger** — the meta-rule lives in context every turn; no "remember to check afterwards"
 - 🧱 **Two-layer isolation** — the standing file holds only the meta-rule + ≤5 top rules; the full rulebook lives in memory
 - 🌱 **Incremental growth** — three recording triggers (errors / user corrections / external cases); repeated errors merge into one entry
-- 📊 **Measurable** — HIT / INCIDENT / RULE events are logged; first quantitative report lands after 4 weeks
+- 📊 **Measurable** — HIT / INCIDENT / RULE events are logged; the [first quantitative report](#2026-09-first-validation-report-cycle-2026-08-06--09-02) was backfilled on 2026-09-02
 
 ## Core Stack
 
@@ -101,7 +101,22 @@ Full rationale: [docs/principle.md](docs/principle.md).
 | bash/PowerShell | DON'T embed `$_` in a PowerShell command inside bash double quotes — the command breaks | registry query |
 | browser automation | DON'T pause >2-3s between operations — the daemon reaps idle sessions | BrowserAct |
 
-> ⚠️ **Honest note on validation**: the table above is anecdotal, not quantitative evidence. Since **2026-08-06** this repo records three event types (HIT / INCIDENT / RULE) per the protocol in [docs/validation.md](docs/validation.md); the first quantitative report (hit rate, prevented count, regression rate, estimated token savings) will be backfilled after 4 weeks. Log: [data/validation-log.md](data/validation-log.md).
+## 2026-09 First Validation Report (cycle 2026-08-06 ~ 09-02, backfilled ahead of 09-06)
+
+| Metric | Value | Note |
+|---|---|---|
+| Rulebook size | 9 → **76** | net +67 (incl. dedup) |
+| HIT | **3** | heredoc delimiter / path-exists check / `$_` single-quote |
+| Prevented | **3** | est. savings ≈ 3 × 3 = 9× single-fix cost |
+| INCIDENT | **6** | 3 on 08-06 + 3 on 08-13 |
+| Regressions | **2** (rate 2/(3+2) = **40%**) | "no-exemption for read-only cmds" and "annotation text into command" each recurred once |
+| RULE records | +3 new / +3 extend / 1 trim / 1 range-batch | — |
+
+> ⚠️ **Honest notes**:
+> - Real data recorded per the protocol in [docs/validation.md](docs/validation.md) since 2026-08-06; log: [data/validation-log.md](data/validation-log.md).
+> - **Hit rate (H/T) is not reported**: the retrieval count T was not recorded per turn.
+> - 08-14 ~ 09-02 cross-session sediment was not attributed per day (the validation log lagged) and is counted as a range batch; this resulted from low precipitation visibility.
+> - **Next step**: the check step runs reliably (`[错题本核对]` appears frequently); the sediment step lacked visibility → fixed on 2026-09-02 with a **precipitation ritual** (mandatory `[沉淀]` line after failures) plus **add-lesson.py** one-command landing (append full text + log + sync copy). The next cycle will verify whether the regression rate drops to zero.
 
 ## Comparison with other approaches (full: [docs/comparison.md](docs/comparison.md))
 
