@@ -10,8 +10,9 @@ v2 新增规则生命周期（docs/validation.md §1.6）：
   - 输出 promotion / demotion / expiry 三清单（人工确认后执行）
 
 用法:
-  python wrongbook-audit.py <jsonl|dir> [--rules <lessons.md>] [--top N]
+  python wrongbook-audit.py <jsonl|dir> [--rules <lessons.md>] [--top N] [--window N]
   --rules 缺省时自动找 %APPDATA%\\reasonix\\self-improvement-lessons.md
+  --window N 事件窗口=最近 N 个活跃会话（默认 20；窗口内统计，防闲置期误判淘汰）
 """
 import os
 import re
@@ -85,6 +86,12 @@ def main() -> int:
             top = int(argv[argv.index('--top') + 1])
         except (ValueError, IndexError):
             pass
+    window = 20  # 事件窗口：最近 N 个活跃会话（docs/validation.md §1.6 v0.3）
+    if '--window' in argv:
+        try:
+            window = int(argv[argv.index('--window') + 1])
+        except (ValueError, IndexError):
+            pass
 
     # 规则库
     lessons = None
@@ -113,18 +120,27 @@ def main() -> int:
         print('[ERROR] no .jsonl found under', target)
         return 1
 
+    # 事件窗口：按 mtime 排序，最近 window 个会话为主窗口；超期文件为历史（不影响窗口判定）
+    files.sort(key=lambda p: os.path.getmtime(p) if os.path.exists(p) else 0, reverse=True)
+    window_files = files[:window]
+
     totals = {'checks': 0, 'hits': 0, 'tools': 0}
     exp_all, hcnt_all = Counter(), Counter()
+    win_exp, win_hcnt = Counter(), Counter()
     for f in sorted(files):
         r = scan_file(f, rules)
         for k in ('checks', 'hits', 'tools'):
             totals[k] += r[k]
         exp_all.update(r['exp'])
         hcnt_all.update(r['hcnt'])
+        if f in window_files:
+            win_exp.update(r['exp'])
+            win_hcnt.update(r['hcnt'])
 
     X, Y, H = totals['tools'], totals['checks'], totals['hits']
-    print('=== wrongbook-audit v2 report ===')
+    print('=== wrongbook-audit v2 report (event-window) ===')
     print('files scanned        :', len(files))
+    print('event window         : latest %d active sessions (%d files total)' % (min(window, len(files)), len(files)))
     print('tool calls X         :', X)
     print('preflight checks Y   :', Y)
     print('hit lines H          :', H)
@@ -135,35 +151,35 @@ def main() -> int:
 
     if rules:
         print('rules loaded         :', len(rules), '(core+ref)')
-        # 每条规则打分
+        # 每条规则打分 —— 用窗口统计（win_exp/win_hcnt），防闲置期误判
         rows = []
         for r in rules:
-            e = exp_all.get(r['title'], 0)
-            h = hcnt_all.get(r['title'], 0)
+            e = win_exp.get(r['title'], 0)
+            h = win_hcnt.get(r['title'], 0)
             impact = 3 if r['section'] == 'core' else 1
             hit_rate = (h / e) if e else 0.0
             score = hit_rate * 0.5 + min(e / 50.0, 1.0) * 0.3 + impact * 0.2 / 3.0
             rows.append({**r, 'exp': e, 'hit': h, 'hit_rate': hit_rate, 'score': score})
         rows.sort(key=lambda x: -x['score'])
-        print('--- rule lifecycle scoring (top %d by RiskScore) ---' % min(top, len(rows)))
+        print('--- rule lifecycle scoring (top %d by RiskScore, window) ---' % min(top, len(rows)))
         for r in rows[:top]:
             print('  [%s] %-8s e=%-4d h=%-3d rate=%-5.0f%% score=%.2f  %s'
                   % (r['section'], r['domain'][:8], r['exp'], r['hit'],
                      r['hit_rate'] * 100, r['score'], r['title']))
-        # 三清单（阈值对齐 docs/validation.md §1.6）
+        # 三清单（阈值对齐 docs/validation.md §1.6；窗口内判定防闲置误伤）
         promo = [r for r in rows if r['section'] == 'appendix'
                  and (r['exp'] >= 15 and r['hit_rate'] >= 0.3)]
         demo = [r for r in rows if r['section'] == 'core'
                 and (r['exp'] < 5 or (r['hit_rate'] < 0.1 and r['hit'] == 0))]
         expiry = [r for r in rows if r['exp'] == 0 and r['hit'] == 0]
-        print('--- lifecycle candidates (manual confirm) ---')
+        print('--- lifecycle candidates (manual confirm, window-based) ---')
         print('  PROPOSED CORE: %d' % len(promo))
         for r in promo[:5]:
             print('    + %s (e=%d rate=%.0f%%)' % (r['title'], r['exp'], r['hit_rate'] * 100))
         print('  PROPOSED DEMOTE: %d' % len(demo))
         for r in demo[:5]:
             print('    - %s (e=%d)' % (r['title'], r['exp']))
-        print('  EXPIRY CANDIDATES: %d (e=0,h=0)' % len(expiry))
+        print('  EXPIRY CANDIDATES: %d (window e=0,h=0; 需连续2窗口才淘汰)' % len(expiry))
         for r in expiry[:5]:
             print('    x %s' % r['title'])
     else:
