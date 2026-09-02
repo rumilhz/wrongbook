@@ -1,20 +1,17 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""wrongbook-audit.py —— 扫会话日志做聚合对账（2026-09-02）
+"""wrongbook-audit.py —— 会话日志外部审计 + 规则生命周期打分（v2，2026-09-02）
 
-用途: 对抗 self-reporting 的最小外部审计。不拦 Agent、只读日志，计算:
-  - 工具调用次数 X（bash 工具 call 计数）
-  - PREFLIGHT 核对行次数 Y（[错题本核对] 出现次数, 统一计 agent 输出的核对行）
-  - 核对率 Compliance = Y / X
-  - 命中行次数 H（核对行含「命中/改用/→」字样）
-  - exposure 粗计数（命中行里引用的规则条目名 top N）
+用途: 对抗 self-reporting 的最小外部审计（不拦 Agent、只读日志）。
+v1 提供聚合对账：核对率 / 命中率 / exposure top。
+v2 新增规则生命周期（docs/validation.md §1.6）：
+  - 按规则统计 exposure / hit（从规则库关键词匹配核对行）
+  - 计算 RiskScore = 命中率×0.5 + 暴露归一化×0.3 + 影响×0.2
+  - 输出 promotion / demotion / expiry 三清单（人工确认后执行）
 
 用法:
-  python wrongbook-audit.py <会话jsonl路径或目录> [--top 10]
-
-说明:
-  - 会话文件为 Reasonix 的 events/transcript jsonl（含 assistant 消息文本）。
-  - 只做 grep 级统计，不解析结构，够用且零依赖。
+  python wrongbook-audit.py <jsonl|dir> [--rules <lessons.md>] [--top N]
+  --rules 缺省时自动找 %APPDATA%\\reasonix\\self-improvement-lessons.md
 """
 import os
 import re
@@ -25,29 +22,57 @@ CHECK_RE = re.compile(r'\[错题本核对\]')
 HIT_RE = re.compile(r'\[错题本核对\].*?(命中|改用|→|->)')
 TOOL_RE = re.compile(r'"name"\s*:\s*"(bash|run_skill|edit_file|write_file|read_file|web_fetch)"', re.I)
 
+CORE_HDR, APP_HDR = '## 核心禁则', '## 参考禁则'
 
-def scan_file(path: str) -> dict:
+
+def load_rules(lessons_path: str):
+    """解析规则库，返回 [(section, domain, title, keywords)]"""
+    rules = []
+    with open(lessons_path, 'r', encoding='utf-8', errors='replace') as f:
+        lines = f.read().split('\n')
+    section = None
+    for ln in lines:
+        s = ln.strip()
+        if CORE_HDR in s:
+            section = 'core'
+            continue
+        if APP_HDR in s:
+            section = 'appendix'
+            continue
+        m = re.match(r'^- \[([^\]]+)\]\s*(.+)$', s)
+        if m and section:
+            dom, title = m.group(1), m.group(2)
+            title = title.split('——')[0].strip()
+            # 关键词 = 标题前 6 字（域标签太宽泛会虚高 exposure，只用作回退）
+            keywords = [title[:6]] if len(title) >= 4 else [title]
+            rules.append({'section': section, 'domain': dom, 'title': title[:30],
+                          'keywords': keywords})
+    return rules
+
+
+def scan_file(path: str, rules) -> tuple:
     with open(path, 'r', encoding='utf-8', errors='replace') as f:
         text = f.read()
-    checks = CHECK_RE.findall(text)
-    hits = HIT_RE.findall(text)
-    tools = TOOL_RE.findall(text)
-    # exposure 粗提取：命中行内「条目名」候选（「」间或 命中X 后的短语）
-    exposures = Counter()
-    for m in re.finditer(r'\[错题本核对\][^\n]{0,120}', text):
+    checks = len(CHECK_RE.findall(text))
+    hits = len(HIT_RE.findall(text))
+    tools = len(TOOL_RE.findall(text))
+    exp = Counter()
+    hcnt = Counter()
+    for m in re.finditer(r'\[错题本核对\][^\n]{0,150}', text):
         seg = m.group(0)
-        for name in re.findall(r'「([^」]{2,20})」', seg):
-            exposures[name] += 1
-        m2 = re.search(r'(?:命中|改用)\s*([^，。；\s、→>]{2,16})', seg)
-        if m2:
-            exposures[m2.group(1).strip()[:14]] += 1
-    return {'checks': len(checks), 'hits': len(hits), 'tools': len(tools), 'exposures': exposures}
+        is_hit = bool(re.search(r'命中|改用|→|->', seg))
+        for r in rules:
+            if any(k and k in seg for k in r['keywords']):
+                exp[r['title']] += 1
+                if is_hit:
+                    hcnt[r['title']] += 1
+    return {'checks': checks, 'hits': hits, 'tools': tools, 'exp': exp, 'hcnt': hcnt}
 
 
 def main() -> int:
     argv = sys.argv[1:]
     if not argv:
-        print('usage: python wrongbook-audit.py <jsonl|dir> [--top N]')
+        print('usage: python wrongbook-audit.py <jsonl|dir> [--rules <lessons.md>] [--top N]')
         return 1
     try:
         sys.stdout.reconfigure(encoding='utf-8', errors='replace')
@@ -61,11 +86,20 @@ def main() -> int:
         except (ValueError, IndexError):
             pass
 
+    # 规则库
+    lessons = None
+    if '--rules' in argv:
+        lessons = argv[argv.index('--rules') + 1]
+    else:
+        cand = os.path.join(os.environ.get('APPDATA', ''), 'reasonix', 'self-improvement-lessons.md')
+        if os.path.exists(cand):
+            lessons = cand
+    rules = load_rules(lessons) if lessons else []
+
     files = []
     if os.path.isdir(target):
         for root, _, names in os.walk(target):
             for n in names:
-                # 只扫主转录 <会话名>.jsonl：排除派生文件（events/event-index/display-index/meta）
                 if n.endswith('.jsonl') and not any(
                     k in n for k in ('events.jsonl', 'event-index', 'display-index', '.meta')
                 ):
@@ -75,34 +109,70 @@ def main() -> int:
     else:
         print('[ERROR] target not found:', target)
         return 1
-
     if not files:
         print('[ERROR] no .jsonl found under', target)
         return 1
 
-    total = {'checks': 0, 'hits': 0, 'tools': 0}
-    exp = Counter()
+    totals = {'checks': 0, 'hits': 0, 'tools': 0}
+    exp_all, hcnt_all = Counter(), Counter()
     for f in sorted(files):
-        r = scan_file(f)
+        r = scan_file(f, rules)
         for k in ('checks', 'hits', 'tools'):
-            total[k] += r[k]
-        exp.update(r['exposures'])
+            totals[k] += r[k]
+        exp_all.update(r['exp'])
+        hcnt_all.update(r['hcnt'])
 
-    X, Y, H = total['tools'], total['checks'], total['hits']
-    print('=== wrongbook-audit report ===')
+    X, Y, H = totals['tools'], totals['checks'], totals['hits']
+    print('=== wrongbook-audit v2 report ===')
     print('files scanned        :', len(files))
     print('tool calls X         :', X)
     print('preflight checks Y   :', Y)
     print('hit lines H          :', H)
-    if X > 0:
+    if X:
         print('compliance Y/X       : {:.1%}'.format(Y / X))
-    if Y > 0:
+    if Y:
         print('hit rate H/Y         : {:.1%}'.format(H / Y))
-    print('--- exposure top %d ---' % top)
-    for name, n in exp.most_common(top):
-        print('  %-18s %d' % (name, n))
-    if Y < X * 0.8:
-        print('[WARN] compliance < 80% — 核对仪式未持续执行，见 docs/validation.md §1.5')
+
+    if rules:
+        print('rules loaded         :', len(rules), '(core+ref)')
+        # 每条规则打分
+        rows = []
+        for r in rules:
+            e = exp_all.get(r['title'], 0)
+            h = hcnt_all.get(r['title'], 0)
+            impact = 3 if r['section'] == 'core' else 1
+            hit_rate = (h / e) if e else 0.0
+            score = hit_rate * 0.5 + min(e / 50.0, 1.0) * 0.3 + impact * 0.2 / 3.0
+            rows.append({**r, 'exp': e, 'hit': h, 'hit_rate': hit_rate, 'score': score})
+        rows.sort(key=lambda x: -x['score'])
+        print('--- rule lifecycle scoring (top %d by RiskScore) ---' % min(top, len(rows)))
+        for r in rows[:top]:
+            print('  [%s] %-8s e=%-4d h=%-3d rate=%-5.0f%% score=%.2f  %s'
+                  % (r['section'], r['domain'][:8], r['exp'], r['hit'],
+                     r['hit_rate'] * 100, r['score'], r['title']))
+        # 三清单（阈值对齐 docs/validation.md §1.6）
+        promo = [r for r in rows if r['section'] == 'appendix'
+                 and (r['exp'] >= 15 and r['hit_rate'] >= 0.3)]
+        demo = [r for r in rows if r['section'] == 'core'
+                and (r['exp'] < 5 or (r['hit_rate'] < 0.1 and r['hit'] == 0))]
+        expiry = [r for r in rows if r['exp'] == 0 and r['hit'] == 0]
+        print('--- lifecycle candidates (manual confirm) ---')
+        print('  PROPOSED CORE: %d' % len(promo))
+        for r in promo[:5]:
+            print('    + %s (e=%d rate=%.0f%%)' % (r['title'], r['exp'], r['hit_rate'] * 100))
+        print('  PROPOSED DEMOTE: %d' % len(demo))
+        for r in demo[:5]:
+            print('    - %s (e=%d)' % (r['title'], r['exp']))
+        print('  EXPIRY CANDIDATES: %d (e=0,h=0)' % len(expiry))
+        for r in expiry[:5]:
+            print('    x %s' % r['title'])
+    else:
+        print('[WARN] no rules loaded — pass --rules <lessons.md> for lifecycle scoring')
+
+    if X and Y < X * 0.2:
+        print('[INVALID] 操作数/核对数 > 5:1 — 本次数据不参与升降级（docs/validation.md §1.6 数据失效保护）')
+    elif Y < X * 0.8:
+        print('[WARN] compliance < 80% — 核对仪式未持续执行')
     return 0
 
 
