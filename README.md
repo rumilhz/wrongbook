@@ -139,7 +139,9 @@ wrongbook/
 │   ├── principle.md           # 原理详解
 │   ├── implementation.md      # 实现细节（平台适配、维护流程）
 │   ├── comparison.md          # 与其他方案深度对比
-│   └── validation.md          # 验证方法：指标、记录协议
+│   ├── validation.md          # 验证方法：指标、记录协议、规则生命周期
+│   ├── experiment.md          # A/B 对照实验协议
+│   └── hooks.md               # 平台 hooks 强制层（适配器层，评审收敛版）
 ├── data/
 │   └── validation-log.md      # 验证数据日志（2026-08-06 起）
 ├── scripts/
