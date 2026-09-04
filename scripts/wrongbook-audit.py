@@ -17,6 +17,7 @@ v2 新增规则生命周期（docs/validation.md §1.6）：
 import os
 import re
 import sys
+import json
 from collections import Counter
 
 CHECK_RE = re.compile(r'\[错题本核对\]')
@@ -74,11 +75,17 @@ def main() -> int:
     argv = sys.argv[1:]
     if not argv:
         print('usage: python wrongbook-audit.py <jsonl|dir> [--rules <lessons.md>] [--top N]')
+        print('       python wrongbook-audit.py --ledger [--top N] [--window N]  # 并行对比：读 hook 事件账本算窗口')
         return 1
     try:
         sys.stdout.reconfigure(encoding='utf-8', errors='replace')
     except Exception:
         pass
+
+    # --ledger 模式：不扫会话文件，直接读 hook 事件账本（tool_call 主窗口）
+    if '--ledger' in argv:
+        return _ledger_mode(argv)
+
     target = argv[0]
     top = 10
     if '--top' in argv:
@@ -189,6 +196,62 @@ def main() -> int:
         print('[INVALID] 操作数/核对数 > 5:1 — 本次数据不参与升降级（docs/validation.md §1.6 数据失效保护）')
     elif Y < X * 0.8:
         print('[WARN] compliance < 80% — 核对仪式未持续执行')
+    return 0
+
+
+def _ledger_mode(argv) -> int:
+    """--ledger 并行对比模式：读 event-ledger.jsonl 的最近 N 条 tool_call 作窗口，
+    输出与 mtime 窗口并行的候选三清单（不切主，供对比：见 Claude 评审『先并行验证再上』）。"""
+    top = 10
+    if '--top' in argv:
+        try:
+            top = int(argv[argv.index('--top') + 1])
+        except (ValueError, IndexError):
+            pass
+    window = 200
+    if '--window' in argv:
+        try:
+            window = int(argv[argv.index('--window') + 1])
+        except (ValueError, IndexError):
+            pass
+
+    ledger = os.path.join(os.environ.get('APPDATA', ''), 'reasonix', 'event-ledger.jsonl')
+    if not os.path.exists(ledger):
+        print('[WARN] ledger not found:', ledger, '— 先让 hooks 跑起来（需要重启 Reasonix）')
+        return 0
+    # 读最近 window 条 tool_call（从后往前）
+    events = []
+    with open(ledger, 'r', encoding='utf-8', errors='replace') as f:
+        lines = f.readlines()
+    for ln in reversed(lines):
+        if len(events) >= window:
+            break
+        try:
+            ev = json.loads(ln)
+        except Exception:
+            continue
+        if ev.get('type') == 'tool_call':
+            events.append(ev)
+    events.reverse()
+    n_tool = len(events)
+    n_open = sum(1 for ln in reversed(lines[:len(lines) - n_tool]) if json.loads(ln).get('type') == 'session_open') \
+        if lines else 0
+    print('=== wrongbook-audit --ledger (event-window, hook-recorded) ===')
+    print('tool_call in window :', n_tool, '(N=%d)' % window)
+    print('session_open total  :', n_open, '(辅助锚点，不参与计数)')
+    if not events:
+        print('[WARN] 账本里没有 tool_call — hooks 未跑（需重启 Reasonix）')
+        return 0
+    # 窗口时间跨度
+    if events:
+        print('window span         : %s -> %s' % (events[0].get('ts', '?'), events[-1].get('ts', '?')))
+    # exposure：窗口内 tool_call 覆盖的工具类型分布（作为 exposure 粗信号）
+    from collections import Counter
+    tools = Counter(e.get('toolName', '?') for e in events)
+    print('--- tool_call 分布 top %d ---' % min(top, len(tools)))
+    for name, n in tools.most_common(min(top, len(tools))):
+        print('  %-18s %d' % (name, n))
+    print('[NOTE] 并行对比模式：此窗口数据尚未用于升降级；正确切换见 docs/validation.md §1.6（待对比一周期后由人工确认）')
     return 0
 
 

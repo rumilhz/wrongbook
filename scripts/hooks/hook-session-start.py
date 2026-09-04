@@ -48,6 +48,15 @@ def main() -> int:
         sys.stdout.reconfigure(encoding='utf-8', errors='replace')
     except Exception:
         pass
+    # 先记账（写入账本文件，不改 stdout——stdout 专用于上下文注入）
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        from _ledger import append_event  # noqa
+        from datetime import datetime
+        append_event({'type': 'session_open', 'ts': datetime.now().isoformat(timespec='seconds'),
+                      'cwd': os.getcwd(), 'mark': 'hook-captured'})
+    except Exception:
+        pass  # 记账失败静默，不影响本会话注入
     if not os.path.exists(LESSONS):
         print('【错题本】核心规则文件缺失，本会话跳过自动注入。')
         return 0
