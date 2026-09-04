@@ -117,7 +117,7 @@
 
 | 方案 | 触发时机 | 前置防错 | 存储 | 评价 |
 |---|---|---|---|---|
-| **本方案**（WrongBook） | 常驻指令 + 按需检索 | ✅ | 指令文件 + 记忆/lessons.md | 零依赖、平台无关、纯指令驱动 |
+| **本方案**（WrongBook） | 常驻指令 + 按需检索 + **平台 hook 强制层**（可选） | ✅ | 指令文件 + 记忆/lessons.md + hook 事件账本 | 零依赖、平台无关；默认纯指令驱动，在支持 hooks 的平台（Claude Code 的 `hooks`、Reasonix 的 `settings.json` 等）可再生**强制前置注入与失败自动记账**（2026-09-02 v0.4 起） |
 | Claude Code 的 CLAUDE.md rules | 常驻 | ✅ | 单一指令文件 | 思路相近；规则与指令同文件，需注意控制体积 |
 | lessons 数据库类 skill | 被动检索 | 部分 | 外部 DB | 适合团队级知识库；需运行维护 |
 | graphify 等 lessons 聚合器 | 会话后聚合 | 部分 | 生成的 LESSONS.md | 适合项目复盘场景 |
@@ -143,7 +143,13 @@ wrongbook/
 ├── data/
 │   └── validation-log.md      # 验证数据日志（2026-08-06 起）
 ├── scripts/
-│   └── validate_lessons.py    # 错题本格式校验脚本（防错本身的防错）
+│   ├── validate_lessons.py     # 错题本格式校验脚本（防错本身的防错）
+│   ├── add-lesson.py           # 一键沉淀：追加全文+记 validation-log+同步副本
+│   ├── wrongbook-audit.py      # 外部审计：核对率/exposure/规则生命周期三清单
+│   ├── generate-rule-index.py  # 生成领域切片索引 rule-index.md
+│   └── hooks/
+│       ├── hook-session-start.py       # SessionStart：注入核心禁则（强制前置核对）
+│       └── hook-post-tool-failure.py   # PostToolUseFailure：失败自动写外部事件账本
 └── .github/
     └── workflows/lint.yml     # CI：push/PR 自动校验错题本格式
 ```
